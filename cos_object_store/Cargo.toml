@@ -1,0 +1,20 @@
+[package]
+name = "cos_object_store"
+version = "0.1.0"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+cos_rs = { path = "../cos_rs" }
+futures-util = "0.3"
+http = "1"
+object_store = { version = "0.14", default-features = false, features = ["cloud-base"] }
+reqwest = { workspace = true }
+url = { workspace = true }

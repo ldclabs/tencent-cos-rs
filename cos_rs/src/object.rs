@@ -472,6 +472,8 @@ fn object_put_options(options: Option<&ObjectPutOptions>) -> Result<RequestOptio
 /// Query and header options for object downloads.
 #[serde(rename_all = "kebab-case")]
 pub struct ObjectGetOptions {
+    #[serde(skip_serializing_if = "Option::is_none", rename = "versionId")]
+    pub version_id: Option<String>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-content-type"

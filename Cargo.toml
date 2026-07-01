@@ -1,9 +1,16 @@
-[package]
-name = "cos-rs"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
+members = ["cos_rs", "cos_object_store"]
 
-[dependencies]
+[workspace.package]
+repository = "https://github.com/ldclabs/tencent-cos-rs"
+homepage = "https://github.com/ldclabs/tencent-cos-rs"
+keywords = []
+categories = ["accessibility", "web-programming", "development-tools"]
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
 aes = "0.9"
 async-trait = "0.1"
 base64 = "0.22"
@@ -36,6 +43,10 @@ tokio = { version = "1", features = [
 ] }
 url = { version = "2", features = ["serde"] }
 
-[features]
-default = []
-live-tests = []
+[profile.release]
+debug = false
+lto = true
+strip = true
+opt-level = 'z'
+codegen-units = 1
+panic = "abort"
