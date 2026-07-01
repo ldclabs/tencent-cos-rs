@@ -277,6 +277,7 @@ impl VectorService {
 /// Vector bucket encryption configuration.
 #[serde(rename_all = "camelCase")]
 pub struct VectorEncryptionConfig {
+    /// Server-side encryption type requested for the vector bucket.
     pub sse_type: String,
 }
 
@@ -284,7 +285,9 @@ pub struct VectorEncryptionConfig {
 /// Request body for creating a vector bucket.
 #[serde(rename_all = "camelCase")]
 pub struct CreateVectorBucketOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Optional server-side encryption configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encryption_configuration: Option<VectorEncryptionConfig>,
 }
@@ -293,6 +296,7 @@ pub struct CreateVectorBucketOptions {
 /// Create vector bucket response.
 #[serde(rename_all = "camelCase")]
 pub struct CreateVectorBucketResult {
+    /// QCS resource identifier of the created vector bucket.
     #[serde(default)]
     pub vector_bucket_qcs: String,
 }
@@ -301,6 +305,7 @@ pub struct CreateVectorBucketResult {
 /// Request body for getting vector bucket metadata.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorBucketOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
 }
 
@@ -308,19 +313,25 @@ pub struct GetVectorBucketOptions {
 /// Vector bucket metadata.
 #[serde(rename_all = "camelCase")]
 pub struct VectorBucketInfo {
+    /// Creation timestamp returned by Vector.
     #[serde(default)]
     pub creation_time: i64,
+    /// Server-side encryption configuration, when present.
     #[serde(default)]
     pub encryption_configuration: Option<VectorEncryptionConfig>,
+    /// QCS resource identifier.
     #[serde(default)]
     pub vector_bucket_qcs: String,
+    /// Vector bucket name.
     #[serde(default)]
     pub vector_bucket_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `GetVectorBucket`.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorBucketResult {
+    /// Bucket metadata, when the bucket exists and is visible.
     #[serde(default)]
     pub vector_bucket: Option<VectorBucketInfo>,
 }
@@ -329,6 +340,7 @@ pub struct GetVectorBucketResult {
 /// Request body for deleting a vector bucket.
 #[serde(rename_all = "camelCase")]
 pub struct DeleteVectorBucketOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
 }
 
@@ -336,63 +348,84 @@ pub struct DeleteVectorBucketOptions {
 /// Request body for listing vector buckets.
 #[serde(rename_all = "camelCase")]
 pub struct ListVectorBucketsOptions {
+    /// Maximum number of buckets to return. `0` omits the field.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_results: i32,
+    /// Pagination token from a previous response.
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub next_token: String,
+    /// Name prefix filter.
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub prefix: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Vector bucket summary.
 #[serde(rename_all = "camelCase")]
 pub struct VectorBucketBrief {
+    /// Creation timestamp returned by Vector.
     #[serde(default)]
     pub creation_time: i64,
+    /// QCS resource identifier.
     #[serde(default)]
     pub vector_bucket_qcs: String,
+    /// Vector bucket name.
     #[serde(default)]
     pub vector_bucket_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `ListVectorBuckets`.
 #[serde(rename_all = "camelCase")]
 pub struct ListVectorBucketsResult {
+    /// Pagination token for the next page.
     #[serde(default)]
     pub next_token: String,
+    /// Bucket summaries.
     #[serde(default)]
     pub vector_buckets: Vec<VectorBucketBrief>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for setting a vector bucket policy.
 #[serde(rename_all = "camelCase")]
 pub struct PutVectorBucketPolicyOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Policy JSON string.
     pub policy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for getting a vector bucket policy.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorBucketPolicyOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `GetVectorBucketPolicy`.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorBucketPolicyResult {
+    /// Policy JSON string.
     #[serde(default)]
     pub policy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for deleting a vector bucket policy.
 #[serde(rename_all = "camelCase")]
 pub struct DeleteVectorBucketPolicyOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Metadata indexing configuration for a vector index.
 #[serde(rename_all = "camelCase")]
 pub struct MetadataConfiguration {
+    /// Metadata keys that should not be filterable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub non_filterable_metadata_keys: Vec<String>,
 }
@@ -401,95 +434,133 @@ pub struct MetadataConfiguration {
 /// Request body for creating a vector index.
 #[serde(rename_all = "camelCase")]
 pub struct CreateIndexOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
+    /// Vector data type, for example `float32`.
     pub data_type: String,
+    /// Vector dimension.
     pub dimension: i32,
+    /// Distance metric name understood by Vector.
     pub distance_metric: String,
+    /// Optional metadata indexing configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_configuration: Option<MetadataConfiguration>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `CreateIndex`.
 #[serde(rename_all = "camelCase")]
 pub struct CreateIndexResult {
+    /// QCS resource identifier of the created index.
     #[serde(default)]
     pub index_qcs: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Vector index metadata.
 #[serde(rename_all = "camelCase")]
 pub struct IndexInfo {
+    /// QCS resource identifier.
     #[serde(default)]
     pub index_qcs: String,
+    /// Index name.
     #[serde(default)]
     pub index_name: String,
+    /// Vector bucket name.
     #[serde(default)]
     pub vector_bucket_name: String,
+    /// Creation timestamp returned by Vector.
     #[serde(default)]
     pub creation_time: i64,
+    /// Vector data type.
     #[serde(default)]
     pub data_type: String,
+    /// Vector dimension.
     #[serde(default)]
     pub dimension: i32,
+    /// Distance metric.
     #[serde(default)]
     pub distance_metric: String,
+    /// Metadata indexing configuration.
     #[serde(default)]
     pub metadata_configuration: Option<MetadataConfiguration>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for getting vector index metadata.
 #[serde(rename_all = "camelCase")]
 pub struct GetIndexOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `GetIndex`.
 #[serde(rename_all = "camelCase")]
 pub struct GetIndexResult {
+    /// Index metadata, when present.
     #[serde(default)]
     pub index: Option<IndexInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for listing indexes.
 #[serde(rename_all = "camelCase")]
 pub struct ListIndexesOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Maximum number of indexes to return. `0` omits the field.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_results: i32,
+    /// Pagination token from a previous response.
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub next_token: String,
+    /// Index name prefix filter.
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub prefix: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Vector index summary.
 #[serde(rename_all = "camelCase")]
 pub struct IndexBrief {
+    /// Creation timestamp returned by Vector.
     #[serde(default)]
     pub creation_time: i64,
+    /// QCS resource identifier.
     #[serde(default)]
     pub index_qcs: String,
+    /// Index name.
     #[serde(default)]
     pub index_name: String,
+    /// Vector bucket name.
     #[serde(default)]
     pub vector_bucket_name: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Response body for `ListIndexes`.
 #[serde(rename_all = "camelCase")]
 pub struct ListIndexesResult {
+    /// Index summaries.
     #[serde(default)]
     pub indexes: Vec<IndexBrief>,
+    /// Pagination token for the next page.
     #[serde(default)]
     pub next_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Request body for deleting a vector index.
 #[serde(rename_all = "camelCase")]
 pub struct DeleteIndexOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
 }
 
@@ -497,6 +568,7 @@ pub struct DeleteIndexOptions {
 /// Vector payload.
 #[serde(rename_all = "camelCase")]
 pub struct VectorData {
+    /// Float32 vector values.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub float32: Vec<f32>,
 }
@@ -505,8 +577,11 @@ pub struct VectorData {
 /// Vector written to an index.
 #[serde(rename_all = "camelCase")]
 pub struct InputVector {
+    /// Caller-defined vector key.
     pub key: String,
+    /// Vector payload.
     pub data: VectorData,
+    /// Optional metadata document.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, Value>,
 }
@@ -515,10 +590,13 @@ pub struct InputVector {
 /// Vector read from an index.
 #[serde(rename_all = "camelCase")]
 pub struct OutputVector {
+    /// Caller-defined vector key.
     #[serde(default)]
     pub key: String,
+    /// Vector payload, present when requested.
     #[serde(default)]
     pub data: Option<VectorData>,
+    /// Metadata document, present when requested and available.
     #[serde(default)]
     pub metadata: BTreeMap<String, Value>,
 }
@@ -527,7 +605,9 @@ pub struct OutputVector {
 /// Target index for writing vectors.
 #[serde(rename_all = "camelCase")]
 pub struct PutVectorsOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
 }
 
@@ -543,10 +623,14 @@ struct PutVectorsRequest {
 /// Target index and return flags for reading vectors.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorsOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
+    /// Whether to return vector payloads.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_data: Option<bool>,
+    /// Whether to return metadata documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_metadata: Option<bool>,
 }
@@ -564,8 +648,10 @@ struct GetVectorsRequest {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+/// Response body for `GetVectors`.
 #[serde(rename_all = "camelCase")]
 pub struct GetVectorsResult {
+    /// Vectors returned by key.
     #[serde(default)]
     pub vectors: Vec<OutputVector>,
 }
@@ -574,18 +660,26 @@ pub struct GetVectorsResult {
 /// Target index and paging options for listing vectors.
 #[serde(rename_all = "camelCase")]
 pub struct ListVectorsOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
+    /// Maximum vectors to return. `0` omits the field.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_results: i32,
+    /// Pagination token from a previous response.
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub next_token: String,
+    /// Whether to return vector payloads.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_data: Option<bool>,
+    /// Whether to return metadata documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_metadata: Option<bool>,
+    /// Optional segmented-list count. Valid range is `1..=16` when non-zero.
     #[serde(skip_serializing_if = "is_zero")]
     pub segment_count: i32,
+    /// Segment index in `[0, segment_count)` when segmented listing is used.
     #[serde(skip_serializing_if = "is_zero")]
     pub segment_index: i32,
 }
@@ -610,18 +704,24 @@ struct ListVectorsRequest {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+/// Response body for `ListVectors`.
 #[serde(rename_all = "camelCase")]
 pub struct ListVectorsResult {
+    /// Vectors in this page.
     #[serde(default)]
     pub vectors: Vec<OutputVector>,
+    /// Pagination token for the next page.
     #[serde(default)]
     pub next_token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Target index for deleting vectors.
 #[serde(rename_all = "camelCase")]
 pub struct DeleteVectorsOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
 }
 
@@ -637,14 +737,20 @@ struct DeleteVectorsRequest {
 /// Vector query options.
 #[serde(rename_all = "camelCase")]
 pub struct QueryVectorsOptions {
+    /// Vector bucket name.
     pub vector_bucket_name: String,
+    /// Index name.
     pub index_name: String,
+    /// Optional metadata filter expression.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<Value>,
+    /// Whether to return vector payloads.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_data: Option<bool>,
+    /// Whether to return metadata documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_metadata: Option<bool>,
+    /// Whether to return distance values.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_distance: Option<bool>,
 }
@@ -667,21 +773,28 @@ struct QueryVectorsRequest {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+/// Vector returned by a similarity query.
 #[serde(rename_all = "camelCase")]
 pub struct QueryOutputVector {
+    /// Caller-defined vector key.
     #[serde(default)]
     pub key: String,
+    /// Vector payload, present when requested.
     #[serde(default)]
     pub data: Option<VectorData>,
+    /// Metadata document, present when requested and available.
     #[serde(default)]
     pub metadata: BTreeMap<String, Value>,
+    /// Distance from the query vector.
     #[serde(default)]
     pub distance: f64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+/// Response body for `QueryVectors`.
 #[serde(rename_all = "camelCase")]
 pub struct QueryVectorsResult {
+    /// Nearest vectors.
     #[serde(default)]
     pub vectors: Vec<QueryOutputVector>,
 }

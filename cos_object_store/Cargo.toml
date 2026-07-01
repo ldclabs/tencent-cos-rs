@@ -1,6 +1,8 @@
 [package]
 name = "cos_object_store"
 version = "0.1.0"
+description = "object_store adapter for Tencent Cloud Object Storage (COS)"
+readme = "README.md"
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
@@ -9,12 +11,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+cos_rs = { path = "../cos_rs", version = "0.1" }
 async-trait = { workspace = true }
 bytes = { workspace = true }
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-cos_rs = { path = "../cos_rs" }
-futures-util = "0.3"
-http = "1"
-object_store = { version = "0.14", default-features = false, features = ["cloud-base"] }
+chrono = { workspace = true }
+futures-util = { workspace = true }
+http = { workspace = true }
+object_store = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }

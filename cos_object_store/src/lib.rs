@@ -2,6 +2,43 @@
 //!
 //! This crate wraps [`cos_rs`] and exposes COS buckets through the
 //! [`object_store::ObjectStore`] trait.
+//!
+//! The adapter maps `object_store` operations onto COS XML APIs:
+//!
+//! - `put`, `get`, `head`, `delete`, `copy`, and range reads use object APIs.
+//! - `list`, `list_with_offset`, `list_with_delimiter`, and paginated listing
+//!   use `Get Bucket`.
+//! - multipart uploads use COS multipart upload APIs and preserve uploaded part
+//!   ordering before completion.
+//! - `Signer::signed_url` uses COS Authorization V5 query signing and requires
+//!   that the store was built with credentials.
+//!
+//! Object bodies are buffered by the underlying [`cos_rs::Response`] before
+//! being exposed as `object_store` streams. This keeps the adapter simple and
+//! predictable, but callers moving very large objects should account for memory
+//! use.
+//!
+//! # Example
+//!
+//! ```no_run
+//! use bytes::Bytes;
+//! use cos_object_store::TencentCos;
+//! use object_store::ObjectStoreExt;
+//! use object_store::path::Path;
+//!
+//! # async fn run() -> object_store::Result<()> {
+//! let store = TencentCos::builder()
+//!     .with_bucket_name("example-1250000000")
+//!     .with_region("ap-guangzhou")
+//!     .with_secret_id_and_key("secret-id", "secret-key")
+//!     .build()?;
+//!
+//! store
+//!     .put(&Path::from("docs/readme.txt"), Bytes::from_static(b"hello").into())
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use std::borrow::Cow;
 use std::collections::BTreeSet;

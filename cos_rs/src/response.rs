@@ -8,9 +8,13 @@ use url::Url;
 #[derive(Debug, Clone)]
 /// HTTP response with status, headers, final URL, and fully-buffered body.
 pub struct Response {
+    /// HTTP status returned by COS.
     pub status: StatusCode,
+    /// Response headers.
     pub headers: HeaderMap,
+    /// Fully buffered response body.
     pub body: Bytes,
+    /// Final request URL.
     pub url: Url,
 }
 

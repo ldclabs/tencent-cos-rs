@@ -356,7 +356,7 @@ impl ObjectService {
             options.as_ref().map(|o| o.sign_host).unwrap_or(true),
         )?;
         let sign = if options.as_ref().map(|o| o.sign_merged).unwrap_or(false) {
-            crate::encoding::encode_component(&auth)
+            format!("sign={}", crate::encoding::encode_component(&auth))
         } else {
             auth.split('&')
                 .map(|part| {
@@ -472,43 +472,55 @@ fn object_put_options(options: Option<&ObjectPutOptions>) -> Result<RequestOptio
 /// Query and header options for object downloads.
 #[serde(rename_all = "kebab-case")]
 pub struct ObjectGetOptions {
+    /// Version id to read.
     #[serde(skip_serializing_if = "Option::is_none", rename = "versionId")]
     pub version_id: Option<String>,
+    /// Override response `Content-Type`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-content-type"
     )]
     pub response_content_type: Option<String>,
+    /// Override response `Content-Language`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-content-language"
     )]
     pub response_content_language: Option<String>,
+    /// Override response `Expires`.
     #[serde(skip_serializing_if = "Option::is_none", rename = "response-expires")]
     pub response_expires: Option<String>,
+    /// Override response `Cache-Control`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-cache-control"
     )]
     pub response_cache_control: Option<String>,
+    /// Override response `Content-Disposition`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-content-disposition"
     )]
     pub response_content_disposition: Option<String>,
+    /// Override response `Content-Encoding`.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "response-content-encoding"
     )]
     pub response_content_encoding: Option<String>,
+    /// CI processing instruction query parameter.
     #[serde(skip_serializing_if = "Option::is_none", rename = "ci-process")]
     pub ci_process: Option<String>,
+    /// Optional HTTP `Range` header value.
     #[serde(skip)]
     pub range: Option<String>,
+    /// Optional `If-Modified-Since` header value.
     #[serde(skip)]
     pub if_modified_since: Option<String>,
+    /// Optional COS traffic limit header in bits per second.
     #[serde(skip)]
     pub traffic_limit: Option<i32>,
+    /// Additional headers not modeled by this struct.
     #[serde(skip)]
     pub extra_headers: HeaderMap,
 }
@@ -516,24 +528,36 @@ pub struct ObjectGetOptions {
 #[derive(Debug, Clone, Default)]
 /// Header options for object uploads and object copy.
 pub struct ObjectPutOptions {
+    /// `Cache-Control` header.
     pub cache_control: Option<String>,
+    /// `Content-Disposition` header.
     pub content_disposition: Option<String>,
+    /// `Content-Encoding` header.
     pub content_encoding: Option<String>,
+    /// `Content-Type` header.
     pub content_type: Option<String>,
+    /// Base64 `Content-MD5` header.
     pub content_md5: Option<String>,
+    /// Explicit content length header.
     pub content_length: Option<u64>,
+    /// Canned ACL header (`x-cos-acl`).
     pub x_cos_acl: Option<String>,
+    /// COS storage class header.
     pub storage_class: Option<String>,
+    /// Optional COS traffic limit header in bits per second.
     pub traffic_limit: Option<i32>,
+    /// Additional headers not modeled by this struct.
     pub extra_headers: HeaderMap,
 }
 
+/// Header options for object copy requests.
 pub type ObjectCopyOptions = ObjectPutOptions;
 
 #[derive(Debug, Clone, Default, Serialize)]
 /// Delete-object query options.
 #[serde(rename_all = "camelCase")]
 pub struct ObjectDeleteOptions {
+    /// Version id to delete.
     #[serde(skip_serializing_if = "Option::is_none", rename = "versionId")]
     pub version_id: Option<String>,
 }
@@ -541,24 +565,34 @@ pub struct ObjectDeleteOptions {
 #[derive(Debug, Clone, Default)]
 /// Head-object query and header options.
 pub struct ObjectHeadOptions {
+    /// Version id to inspect.
     pub version_id: Option<String>,
+    /// Additional headers not modeled by this struct.
     pub extra_headers: HeaderMap,
 }
 
 #[derive(Debug, Clone, Default)]
 /// CORS preflight headers for object `OPTIONS`.
 pub struct ObjectOptionsOptions {
+    /// CORS `Origin` header.
     pub origin: Option<String>,
+    /// CORS `Access-Control-Request-Method` header.
     pub access_control_request_method: Option<String>,
+    /// CORS `Access-Control-Request-Headers` header.
     pub access_control_request_headers: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
 /// Additional options for presigned object URLs.
 pub struct PresignedUrlOptions {
+    /// Query parameters and headers included in the signature.
     pub request_options: RequestOptions,
+    /// Explicit signing window. When omitted, `expires` passed to
+    /// [`ObjectService::get_presigned_url`] is used.
     pub auth_time: Option<crate::AuthTime>,
+    /// Include the Host header in the signature.
     pub sign_host: bool,
+    /// Merge the signature into a single encoded query value.
     pub sign_merged: bool,
 }
 
@@ -566,7 +600,9 @@ pub struct PresignedUrlOptions {
 /// Object identifier used in multi-delete XML.
 #[serde(rename_all = "PascalCase")]
 pub struct DeleteObject {
+    /// Object key to delete.
     pub key: String,
+    /// Optional version id to delete.
     #[serde(skip_serializing_if = "Option::is_none", rename = "VersionId")]
     pub version_id: Option<String>,
 }
@@ -575,7 +611,9 @@ pub struct DeleteObject {
 /// Multi-delete request body.
 #[serde(rename = "Delete", rename_all = "PascalCase")]
 pub struct DeleteMultiOptions {
+    /// Whether COS should omit successful deletions from the response.
     pub quiet: bool,
+    /// Objects to delete.
     #[serde(rename = "Object")]
     pub objects: Vec<DeleteObject>,
 }
@@ -584,18 +622,24 @@ pub struct DeleteMultiOptions {
 /// Multi-delete response body.
 #[serde(rename = "DeleteResult", rename_all = "PascalCase")]
 pub struct DeleteMultiResult {
+    /// Successfully deleted objects.
     #[serde(default, rename = "Deleted")]
     pub deleted: Vec<DeleteObject>,
+    /// Per-object delete failures.
     #[serde(default, rename = "Error")]
     pub errors: Vec<DeleteError>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+/// Per-object error returned by multi-delete.
 #[serde(rename_all = "PascalCase")]
 pub struct DeleteError {
+    /// Object key that failed.
     pub key: String,
+    /// COS error code.
     #[serde(default)]
     pub code: String,
+    /// COS error message.
     #[serde(default)]
     pub message: String,
 }
@@ -604,10 +648,13 @@ pub struct DeleteError {
 /// Multipart upload initiation response.
 #[serde(rename = "InitiateMultipartUploadResult", rename_all = "PascalCase")]
 pub struct InitiateMultipartUploadResult {
+    /// Bucket name.
     #[serde(default)]
     pub bucket: String,
+    /// Object key.
     #[serde(default)]
     pub key: String,
+    /// Upload id used by subsequent multipart calls.
     #[serde(default)]
     pub upload_id: String,
 }
@@ -616,10 +663,13 @@ pub struct InitiateMultipartUploadResult {
 /// Query options for listing uploaded parts.
 #[serde(rename_all = "camelCase")]
 pub struct ListPartsOptions {
+    /// Return parts after this part number.
     #[serde(skip_serializing_if = "Option::is_none", rename = "part-number-marker")]
     pub part_number_marker: Option<u32>,
+    /// Maximum number of parts to return.
     #[serde(skip_serializing_if = "Option::is_none", rename = "max-parts")]
     pub max_parts: Option<u32>,
+    /// Optional response encoding, commonly `url`.
     #[serde(skip_serializing_if = "Option::is_none", rename = "encoding-type")]
     pub encoding_type: Option<String>,
 }
@@ -628,25 +678,34 @@ pub struct ListPartsOptions {
 /// Uploaded part list response.
 #[serde(rename = "ListPartsResult", rename_all = "PascalCase")]
 pub struct ListPartsResult {
+    /// Bucket name.
     #[serde(default)]
     pub bucket: String,
+    /// Object key.
     #[serde(default)]
     pub key: String,
+    /// Upload id.
     #[serde(default)]
     pub upload_id: String,
+    /// Uploaded parts in this page.
     #[serde(default, rename = "Part")]
     pub parts: Vec<Part>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+/// Multipart part summary.
 #[serde(rename_all = "PascalCase")]
 pub struct Part {
+    /// Part number.
     #[serde(default)]
     pub part_number: u32,
+    /// Last modification timestamp as returned by COS.
     #[serde(default)]
     pub last_modified: String,
+    /// Entity tag for the part.
     #[serde(default, rename = "ETag")]
     pub etag: String,
+    /// Part size in bytes.
     #[serde(default)]
     pub size: i64,
 }
@@ -655,7 +714,9 @@ pub struct Part {
 /// Part descriptor used when completing a multipart upload.
 #[serde(rename_all = "PascalCase")]
 pub struct CompletePart {
+    /// Part number.
     pub part_number: u32,
+    /// Entity tag returned by `Upload Part`.
     #[serde(rename = "ETag")]
     pub etag: String,
 }
@@ -664,6 +725,7 @@ pub struct CompletePart {
 /// Complete multipart upload request body.
 #[serde(rename = "CompleteMultipartUpload", rename_all = "PascalCase")]
 pub struct CompleteMultipartUploadOptions {
+    /// Ordered parts to commit.
     #[serde(rename = "Part")]
     pub parts: Vec<CompletePart>,
 }
@@ -672,12 +734,16 @@ pub struct CompleteMultipartUploadOptions {
 /// Complete multipart upload response body.
 #[serde(rename = "CompleteMultipartUploadResult", rename_all = "PascalCase")]
 pub struct CompleteMultipartUploadResult {
+    /// Object location URL returned by COS.
     #[serde(default)]
     pub location: String,
+    /// Bucket name.
     #[serde(default)]
     pub bucket: String,
+    /// Object key.
     #[serde(default)]
     pub key: String,
+    /// Entity tag of the completed object.
     #[serde(default, rename = "ETag")]
     pub etag: String,
 }

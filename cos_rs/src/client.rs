@@ -24,12 +24,19 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Logical COS endpoint family used when choosing a base URL.
 pub enum Endpoint {
+    /// Bucket-scoped XML APIs such as object and bucket operations.
     Bucket,
+    /// Account-level Service API.
     Service,
+    /// Batch job API.
     Batch,
+    /// Cloud Infinite media processing API.
     Ci,
+    /// COS Fetch Task API endpoint family.
     Fetch,
+    /// MetaInsight API.
     MetaInsight,
+    /// Vector JSON API.
     Vector,
 }
 
@@ -54,12 +61,19 @@ impl Endpoint {
 /// CI, MetaInsight, and Vector URLs are optional because most applications only
 /// use a subset of COS features.
 pub struct BaseUrl {
+    /// Bucket endpoint, for example `https://example-1250000000.cos.ap-guangzhou.myqcloud.com`.
     pub bucket: Option<Url>,
+    /// Account-level Service endpoint.
     pub service: Option<Url>,
+    /// Batch operation endpoint.
     pub batch: Option<Url>,
+    /// Cloud Infinite endpoint.
     pub ci: Option<Url>,
+    /// Fetch Task endpoint.
     pub fetch: Option<Url>,
+    /// MetaInsight endpoint.
     pub meta_insight: Option<Url>,
+    /// Vector API endpoint.
     pub vector: Option<Url>,
 }
 
@@ -146,8 +160,11 @@ impl BaseUrl {
 #[derive(Debug, Clone)]
 /// Retry behavior shared by COS XML and Vector JSON requests.
 pub struct RetryOptions {
+    /// Maximum attempts per request. Values below `1` are treated as `1`.
     pub count: usize,
+    /// Delay inserted between retry attempts.
     pub interval: Duration,
+    /// Switch COS hosts from `myqcloud.com` to `tencentcos.cn` on the final retry.
     pub auto_switch_host: bool,
 }
 
@@ -164,9 +181,13 @@ impl Default for RetryOptions {
 #[derive(Debug, Clone)]
 /// Client-wide behavior flags.
 pub struct Config {
+    /// Enable CRC-related compatibility behavior when implemented by request helpers.
     pub enable_crc: bool,
+    /// Compatibility flag reserved for Go SDK request-body close behavior.
     pub request_body_close: bool,
+    /// Retry policy for transport errors and 5xx API responses.
     pub retry: RetryOptions,
+    /// Enable simplified object-key validation compatibility checks.
     pub object_key_simplify_check: bool,
 }
 
@@ -620,9 +641,12 @@ fn switch_host(url: &Url) -> Url {
     let Some(host) = url.host_str() else {
         return url.clone();
     };
-    if host.ends_with(".myqcloud.com")
-        && host.contains(".cos.")
-        && !host.ends_with("accelerate.myqcloud.com")
+    let labels = host.split('.').collect::<Vec<_>>();
+    if labels.len() >= 5
+        && labels.get(1) == Some(&"cos")
+        && labels.last() == Some(&"com")
+        && labels.get(labels.len() - 2) == Some(&"myqcloud")
+        && labels.get(2) != Some(&"accelerate")
     {
         let mut switched = url.clone();
         let new_host = host.trim_end_matches(".myqcloud.com").to_owned() + ".tencentcos.cn";
@@ -656,16 +680,100 @@ mod tests {
             url.as_str().trim_end_matches('/'),
             "http://bname-idx.cos.ap-guangzhou.myqcloud.com"
         );
+        let url = BaseUrl::bucket_url("bname-idx", "ap-guangzhou", true).unwrap();
+        assert_eq!(
+            url.as_str().trim_end_matches('/'),
+            "https://bname-idx.cos.ap-guangzhou.myqcloud.com"
+        );
         assert!(BaseUrl::bucket_url("", "ap-guangzhou", false).is_err());
         assert!(BaseUrl::bucket_url("bname-idx", "", false).is_err());
+        assert!(BaseUrl::bucket_url("bname-idx", "ap Guangzhou", false).is_err());
     }
 
     #[test]
     fn switch_host_matches_go_sdk() {
-        let url = Url::parse("https://example-125000000.cos.ap-chengdu.myqcloud.com/123").unwrap();
+        let cases = [
+            (
+                "https://example-125000000.cos.ap-chengdu.myqcloud.com/123",
+                "https://example-125000000.cos.ap-chengdu.tencentcos.cn/123",
+            ),
+            (
+                "https://example-125000000.cos.ap-chengdu.tencentcos.cn/123",
+                "https://example-125000000.cos.ap-chengdu.tencentcos.cn/123",
+            ),
+            (
+                "https://service.cos.myqcloud.com/123",
+                "https://service.cos.myqcloud.com/123",
+            ),
+            (
+                "https://example-125000000.file.myqcloud.com/123",
+                "https://example-125000000.file.myqcloud.com/123",
+            ),
+            (
+                "http://example-125000000.cos.ap-chengdu.myqcloud.com:80/123",
+                "http://example-125000000.cos.ap-chengdu.tencentcos.cn/123",
+            ),
+            (
+                "https://example-125000000.cos-website.ap-chengdu.myqcloud.com:443/123",
+                "https://example-125000000.cos-website.ap-chengdu.myqcloud.com/123",
+            ),
+            (
+                "https://example-125000000.cos.accelerate.myqcloud.com:443/123",
+                "https://example-125000000.cos.accelerate.myqcloud.com/123",
+            ),
+        ];
+        for (input, expected) in cases {
+            let url = Url::parse(input).unwrap();
+            assert_eq!(switch_host(&url).as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn vector_url_helpers_match_go_sdk() {
         assert_eq!(
-            switch_host(&url).as_str(),
-            "https://example-125000000.cos.ap-chengdu.tencentcos.cn/123"
+            BaseUrl::vector_url("ap-guangzhou", false)
+                .unwrap()
+                .as_str()
+                .trim_end_matches('/'),
+            "http://vectors.ap-guangzhou.coslake.com"
         );
+        assert_eq!(
+            BaseUrl::vector_url("ap-shanghai", true)
+                .unwrap()
+                .as_str()
+                .trim_end_matches('/'),
+            "https://vectors.ap-shanghai.coslake.com"
+        );
+        assert!(BaseUrl::vector_url("", false).is_err());
+
+        assert_eq!(
+            BaseUrl::vector_internal_url("ap-beijing", false)
+                .unwrap()
+                .as_str()
+                .trim_end_matches('/'),
+            "http://vectors.ap-beijing.internal.tencentcos.com"
+        );
+        assert_eq!(
+            BaseUrl::vector_endpoint_url("vectors.ap-guangzhou.coslake.com")
+                .unwrap()
+                .as_str()
+                .trim_end_matches('/'),
+            "https://vectors.ap-guangzhou.coslake.com"
+        );
+        assert_eq!(
+            BaseUrl::vector_endpoint_url("http://vectors.ap-guangzhou.coslake.com")
+                .unwrap()
+                .as_str()
+                .trim_end_matches('/'),
+            "http://vectors.ap-guangzhou.coslake.com"
+        );
+        assert!(BaseUrl::vector_endpoint_url("").is_err());
+    }
+
+    #[test]
+    fn empty_body_only_for_put_and_post() {
+        assert!(empty_put_post_body(&Method::PUT).is_some());
+        assert!(empty_put_post_body(&Method::POST).is_some());
+        assert!(empty_put_post_body(&Method::GET).is_none());
     }
 }

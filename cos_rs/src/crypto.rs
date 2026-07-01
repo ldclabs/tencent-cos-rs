@@ -24,16 +24,26 @@ use std::sync::Arc;
 
 type Aes256Ctr = ctr::Ctr128BE<Aes256>;
 
+/// User-agent suffix used by COS client-side encryption implementations.
 pub const ENCRYPTION_UA_SUFFIX: &str = "coscrypto";
+/// Content-encryption algorithm written to COS metadata.
 pub const AES_CTR_ALGORITHM: &str = "AES/CTR/NoPadding";
+/// Wrap algorithm name written when TencentCloud KMS is used.
 pub const COS_KMS_CRYPTO_WRAP: &str = "KMS/TencentCloud";
+/// Metadata header containing the encrypted content key.
 pub const COS_CLIENT_SIDE_ENCRYPTION_KEY: &str = "x-cos-meta-client-side-encryption-key";
+/// Metadata header containing the encrypted IV.
 pub const COS_CLIENT_SIDE_ENCRYPTION_START: &str = "x-cos-meta-client-side-encryption-start";
+/// Metadata header containing the content-encryption algorithm.
 pub const COS_CLIENT_SIDE_ENCRYPTION_CEK_ALG: &str = "x-cos-meta-client-side-encryption-cek-alg";
+/// Metadata header containing the master-key wrap algorithm.
 pub const COS_CLIENT_SIDE_ENCRYPTION_WRAP_ALG: &str = "x-cos-meta-client-side-encryption-wrap-alg";
+/// Metadata header containing the serialized material description.
 pub const COS_CLIENT_SIDE_ENCRYPTION_MAT_DESC: &str = "x-cos-meta-client-side-encryption-matdesc";
+/// Metadata header containing the plaintext object length.
 pub const COS_CLIENT_SIDE_ENCRYPTION_UNENCRYPTED_CONTENT_LENGTH: &str =
     "x-cos-meta-client-side-encryption-unencrypted-content-length";
+/// Metadata header reserved for the plaintext content MD5.
 pub const COS_CLIENT_SIDE_ENCRYPTION_UNENCRYPTED_CONTENT_MD5: &str =
     "x-cos-meta-client-side-encryption-unencrypted-content-md5";
 
@@ -61,6 +71,7 @@ pub struct LocalMasterCipher {
 }
 
 impl LocalMasterCipher {
+    /// Create a local master cipher from a 256-bit key and material description.
     pub fn new(key: [u8; 32], material_description: impl Into<String>) -> Self {
         Self {
             key: Arc::new(key),
@@ -111,6 +122,9 @@ pub struct KmsMasterCipher {
 }
 
 impl KmsMasterCipher {
+    /// Create a Tencent KMS-backed master cipher.
+    ///
+    /// `desc` is serialized to JSON and must match on decrypt.
     pub fn new(
         client: KmsClient,
         kms_id: impl Into<String>,
@@ -159,6 +173,7 @@ pub struct CryptoClient<M: MasterCipher> {
 }
 
 impl<M: MasterCipher> CryptoClient<M> {
+    /// Create a crypto wrapper around an existing COS client.
     pub fn new(client: Client, master: M) -> Self {
         Self {
             client: client.clone(),
@@ -166,10 +181,12 @@ impl<M: MasterCipher> CryptoClient<M> {
         }
     }
 
+    /// Return the encrypted object API entry point.
     pub fn object(&self) -> &CryptoObjectService<M> {
         &self.object
     }
 
+    /// Return the underlying plain COS client.
     pub fn inner(&self) -> &Client {
         &self.client
     }
@@ -333,6 +350,7 @@ pub struct KmsClient {
 }
 
 impl KmsClient {
+    /// Create a KMS client using TencentCloud credentials and region.
     pub fn new(credential: Credential, region: impl Into<String>) -> Result<Self> {
         Ok(Self {
             http: reqwest::Client::new(),
@@ -342,6 +360,7 @@ impl KmsClient {
         })
     }
 
+    /// Override the TencentCloud KMS endpoint host.
     pub fn endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.endpoint = endpoint.into();
         self

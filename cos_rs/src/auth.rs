@@ -19,8 +19,11 @@ const DEFAULT_AUTH_EXPIRE: Duration = Duration::from_secs(3600);
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// COS credential triplet.
 pub struct Credential {
+    /// Tencent Cloud SecretId.
     pub secret_id: String,
+    /// Tencent Cloud SecretKey.
     pub secret_key: String,
+    /// Optional STS session token for temporary credentials.
     pub session_token: Option<String>,
 }
 
@@ -64,6 +67,7 @@ pub struct StaticCredentialProvider {
 }
 
 impl StaticCredentialProvider {
+    /// Create a provider that clones and returns `credential` for every request.
     pub fn new(credential: Credential) -> Self {
         Self { credential }
     }
@@ -120,9 +124,13 @@ impl CredentialProvider for EnvCredentialProvider {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Signing time windows used by COS Authorization V5.
 pub struct AuthTime {
+    /// Inclusive Unix timestamp at which the Authorization header becomes valid.
     pub sign_start_time: i64,
+    /// Unix timestamp at which the Authorization header expires.
     pub sign_end_time: i64,
+    /// Inclusive Unix timestamp at which the derived signing key becomes valid.
     pub key_start_time: i64,
+    /// Unix timestamp at which the derived signing key expires.
     pub key_end_time: i64,
 }
 
@@ -390,5 +398,58 @@ mod tests {
         )
         .unwrap();
         assert_eq!(auth, expect);
+    }
+
+    #[test]
+    fn add_authorization_headers_rejects_space_padded_credentials() {
+        let url = Url::parse("https://example-1250000000.cos.ap-guangzhou.myqcloud.com/").unwrap();
+        let mut headers = HeaderMap::new();
+        let err = add_authorization_headers(
+            &Credential::new(" test", "sk"),
+            &Method::GET,
+            &url,
+            &mut headers,
+            Some(&AuthTime::fixed(1, 2)),
+            true,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("SecretID is invalid"));
+
+        let err = add_authorization_headers(
+            &Credential::new("ak", "sk "),
+            &Method::GET,
+            &url,
+            &mut headers,
+            Some(&AuthTime::fixed(1, 2)),
+            true,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("SecretKey is invalid"));
+    }
+
+    #[test]
+    fn add_authorization_headers_adds_session_token_and_host() {
+        let url =
+            Url::parse("https://example-1250000000.cos.ap-guangzhou.myqcloud.com/test").unwrap();
+        let mut headers = HeaderMap::new();
+
+        add_authorization_headers(
+            &Credential::with_token("ak", "sk", "token"),
+            &Method::GET,
+            &url,
+            &mut headers,
+            Some(&AuthTime::fixed(1, 2)),
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(
+            headers.get(HOST).unwrap(),
+            "example-1250000000.cos.ap-guangzhou.myqcloud.com"
+        );
+        assert_eq!(headers.get("x-cos-security-token").unwrap(), "token");
+        let authorization = headers.get("authorization").unwrap().to_str().unwrap();
+        assert!(authorization.contains("q-ak=ak"));
+        assert!(authorization.contains("q-header-list=host;x-cos-security-token"));
     }
 }

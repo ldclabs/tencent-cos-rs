@@ -120,6 +120,7 @@ impl CiService {
 /// Picture processing operation list.
 #[serde(rename_all = "PascalCase")]
 pub struct PicOperations {
+    /// Picture processing rules.
     #[serde(default, skip_serializing_if = "Vec::is_empty", rename = "Rules")]
     pub rules: Vec<PicOperationsRule>,
 }
@@ -128,8 +129,10 @@ pub struct PicOperations {
 /// Single picture processing rule.
 #[serde(rename_all = "PascalCase")]
 pub struct PicOperationsRule {
+    /// Output object key for this processing rule.
     #[serde(default)]
     pub file_id: String,
+    /// CI picture processing rule string.
     #[serde(default)]
     pub rule: String,
 }

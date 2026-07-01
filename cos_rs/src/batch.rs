@@ -124,9 +124,13 @@ impl BatchService {
 #[derive(Debug, Clone, Default)]
 /// Headers commonly required by Batch APIs.
 pub struct BatchRequestHeaders {
+    /// Tencent Cloud application id header (`x-cos-appid`).
     pub x_cos_appid: Option<i64>,
+    /// Optional explicit content length header.
     pub content_length: Option<String>,
+    /// Optional explicit content type header.
     pub content_type: Option<String>,
+    /// Additional Batch headers not modeled by this struct.
     pub extra_headers: reqwest::header::HeaderMap,
 }
 
@@ -160,23 +164,31 @@ impl From<BatchRequestHeaders> for RequestOptions {
 /// Query options for listing Batch jobs.
 #[serde(rename_all = "camelCase")]
 pub struct BatchListJobsOptions {
+    /// Comma-separated job statuses to include.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_statuses: Option<String>,
+    /// Maximum jobs to return.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_results: Option<i32>,
+    /// Pagination token from the previous response.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Request body used by `UpdateJobPriority`.
 #[serde(rename = "UpdateJobPriority", rename_all = "PascalCase")]
 pub struct BatchUpdatePriority {
+    /// New job priority.
     pub priority: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Request body used by `UpdateJobStatus`.
 #[serde(rename = "UpdateJobStatus", rename_all = "PascalCase")]
 pub struct BatchUpdateStatus {
+    /// Requested target status, for example `Cancelled`.
     pub requested_job_status: String,
+    /// Human-readable reason for the status change.
     pub status_update_reason: String,
 }

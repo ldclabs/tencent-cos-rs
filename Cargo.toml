@@ -17,9 +17,15 @@ base64 = "0.22"
 bytes = "1"
 crc = "3"
 ctr = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+futures-util = "0.3"
+http = "1"
 hex = "0.4"
 hmac = "0.13"
 md-5 = "0.11"
+object_store = { version = "0.14", default-features = false, features = [
+  "cloud-base",
+] }
 percent-encoding = "2"
 quick-xml = { version = "0.41", features = ["serialize"] }
 rand = "0.10"
