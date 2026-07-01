@@ -1,10 +1,10 @@
 use cos_rs::{
-    AuthTime, BaseUrl, BucketGetOptions, BucketPutAclOptions, BucketVersioningConfiguration,
-    Client, CompletePart, Config, CreateVectorBucketOptions, Credential, DeleteObject,
-    DeleteVectorsOptions, Error, GetVectorsOptions, InputVector, ListVectorsOptions,
-    ObjectDeleteOptions, ObjectOptionsOptions, ObjectPutOptions, PresignedUrlOptions,
-    PutVectorsOptions, QueryVectorsOptions, RequestOptions, RetryOptions, ServiceGetOptions,
-    VectorData, VectorEncryptionConfig,
+    AuthTime, BaseUrl, BucketGetObjectVersionsOptions, BucketGetOptions, BucketPutAclOptions,
+    BucketVersioningConfiguration, Client, CompletePart, Config, CreateVectorBucketOptions,
+    Credential, DeleteObject, DeleteVectorsOptions, Error, GetVectorsOptions, InputVector,
+    ListVectorsOptions, ObjectDeleteOptions, ObjectOptionsOptions, ObjectPutOptions,
+    PresignedUrlOptions, PutVectorsOptions, QueryVectorsOptions, RequestOptions, RetryOptions,
+    ServiceGetOptions, VectorData, VectorEncryptionConfig,
 };
 use reqwest::Method;
 use serde_json::Value;
@@ -370,6 +370,67 @@ async fn bucket_put_and_get_versioning_match_go_sdk() {
             status: "Suspended".to_owned()
         }
     );
+}
+
+#[tokio::test]
+async fn bucket_get_object_versions_parses_repeated_entries() {
+    let server = serve_once(
+        r#"<ListVersionsResult>
+  <Name>b-1</Name>
+  <Prefix>put_opts</Prefix>
+  <KeyMarker/>
+  <VersionIdMarker/>
+  <MaxKeys>100</MaxKeys>
+  <IsTruncated>false</IsTruncated>
+  <Version>
+    <Key>put_opts</Key>
+    <VersionId>v2</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2026-07-01T08:00:01.000Z</LastModified>
+    <ETag>&quot;e2&quot;</ETag>
+    <Size>1</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Version>
+  <Version>
+    <Key>put_opts</Key>
+    <VersionId>v1</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2026-07-01T08:00:00.000Z</LastModified>
+    <ETag>&quot;e1&quot;</ETag>
+    <Size>1</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Version>
+  <DeleteMarker>
+    <Key>deleted</Key>
+    <VersionId>d1</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2026-07-01T08:00:02.000Z</LastModified>
+  </DeleteMarker>
+</ListVersionsResult>"#,
+    );
+    let client = bucket_client(server.url());
+
+    let (result, _) = client
+        .bucket()
+        .get_object_versions(Some(BucketGetObjectVersionsOptions {
+            prefix: Some("put_opts".to_owned()),
+            max_keys: Some(100),
+            ..Default::default()
+        }))
+        .await
+        .unwrap();
+
+    let request = server.next_request();
+    assert!(
+        request.starts_with("GET /?versions&prefix=put_opts&max-keys=100 HTTP/1.1"),
+        "{request}"
+    );
+    assert_eq!(result.name, "b-1");
+    assert_eq!(result.versions.len(), 2);
+    assert_eq!(result.versions[0].version_id, "v2");
+    assert_eq!(result.versions[1].version_id, "v1");
+    assert_eq!(result.delete_markers.len(), 1);
+    assert_eq!(result.delete_markers[0].version_id, "d1");
 }
 
 #[tokio::test]

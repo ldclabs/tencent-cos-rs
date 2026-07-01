@@ -1,6 +1,6 @@
 [package]
 name = "cos_rs"
-version = "0.1.0"
+version = "0.1.1"
 description = "Async Tencent Cloud Object Storage (COS) XML API V5 SDK"
 readme = "README.md"
 repository.workspace = true
@@ -32,6 +32,9 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+dotenv = "0.15"
 
 [features]
 default = []

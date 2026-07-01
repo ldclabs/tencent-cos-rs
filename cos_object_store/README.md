@@ -35,3 +35,20 @@ async fn main() -> object_store::Result<()> {
 `TENCENT_COS_BUCKET`, `COS_REGION` or `TENCENT_COS_REGION`, `COS_BUCKET_URL` or
 `TENCENT_COS_BUCKET_URL`, plus `COS_SECRETID`, `COS_SECRETKEY`, and optional
 `COS_SESSION_TOKEN`.
+
+## Conditional Writes
+
+`object_store::PutMode::Update` is not implemented for COS. Direct `PUT Object`
+does not support destination-side `If-Match` / `If-None-Match`, and `PUT Object
+- Copy` only applies `x-cos-copy-source-If-*` conditions to the source object.
+That copy API can atomically copy an existing object or update metadata, but it
+cannot replace the target object with a new `PutPayload`.
+
+`PutMode::Create` and `CopyMode::Create` use `x-cos-forbid-overwrite: true`
+where COS supports it. When bucket versioning is enabled, COS documents that
+`x-cos-forbid-overwrite` is ineffective, so these modes cannot provide a
+cross-client atomic create-if-absent guarantee on versioned buckets.
+
+For buckets that enable versioning, configure lifecycle rules to periodically
+clean old non-current versions; otherwise workloads can accumulate historical
+versions over time.

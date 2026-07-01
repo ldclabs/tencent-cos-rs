@@ -14,7 +14,7 @@ use bytes::Bytes;
 use reqwest::Method;
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Clone)]
 /// Bucket API entry point.
@@ -532,7 +532,7 @@ pub struct BucketGetObjectVersionsOptions {
     pub max_keys: Option<i32>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 /// Parsed `Get Object Versions` result.
 #[serde(rename = "ListVersionsResult", rename_all = "PascalCase")]
 pub struct BucketGetObjectVersionsResult {
@@ -566,6 +566,66 @@ pub struct BucketGetObjectVersionsResult {
     /// Delete markers in this page.
     #[serde(default, rename = "DeleteMarker")]
     pub delete_markers: Vec<ListVersionsResultDeleteMarker>,
+}
+
+impl<'de> Deserialize<'de> for BucketGetObjectVersionsResult {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "ListVersionsResult", rename_all = "PascalCase")]
+        struct RawBucketGetObjectVersionsResult {
+            #[serde(default)]
+            name: String,
+            #[serde(default)]
+            prefix: String,
+            #[serde(default)]
+            key_marker: String,
+            #[serde(default)]
+            version_id_marker: String,
+            #[serde(default)]
+            max_keys: i32,
+            #[serde(default)]
+            is_truncated: bool,
+            #[serde(default)]
+            next_key_marker: String,
+            #[serde(default)]
+            next_version_id_marker: String,
+            #[serde(default, rename = "$value")]
+            entries: Vec<ListVersionsResultEntry>,
+        }
+
+        let raw = RawBucketGetObjectVersionsResult::deserialize(deserializer)?;
+        let mut versions = Vec::new();
+        let mut delete_markers = Vec::new();
+        for entry in raw.entries {
+            match entry {
+                ListVersionsResultEntry::Version(version) => versions.push(version),
+                ListVersionsResultEntry::DeleteMarker(marker) => delete_markers.push(marker),
+            }
+        }
+
+        Ok(Self {
+            name: raw.name,
+            prefix: raw.prefix,
+            key_marker: raw.key_marker,
+            version_id_marker: raw.version_id_marker,
+            max_keys: raw.max_keys,
+            is_truncated: raw.is_truncated,
+            next_key_marker: raw.next_key_marker,
+            next_version_id_marker: raw.next_version_id_marker,
+            versions,
+            delete_markers,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+enum ListVersionsResultEntry {
+    Version(ListVersionsResultVersion),
+    DeleteMarker(ListVersionsResultDeleteMarker),
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]

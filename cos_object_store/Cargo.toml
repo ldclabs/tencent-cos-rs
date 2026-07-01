@@ -1,6 +1,6 @@
 [package]
 name = "cos_object_store"
-version = "0.1.0"
+version = "0.1.1"
 description = "object_store adapter for Tencent Cloud Object Storage (COS)"
 readme = "README.md"
 repository.workspace = true
@@ -20,3 +20,8 @@ http = { workspace = true }
 object_store = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+dotenv = "0.15"
+tokio = { workspace = true, features = ["test-util"] }
+object_store = { workspace = true, features = ["integration", "cloud-base"] }

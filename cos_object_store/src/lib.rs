@@ -10,6 +10,8 @@
 //!   use `Get Bucket`.
 //! - multipart uploads use COS multipart upload APIs and preserve uploaded part
 //!   ordering before completion.
+//! - `PutMode::Update` is not implemented because COS has no
+//!   destination-side conditional PUT for replacing object content.
 //! - `Signer::signed_url` uses COS Authorization V5 query signing and requires
 //!   that the store was built with credentials.
 //!
@@ -81,6 +83,7 @@ const STORAGE_CLASS_HEADER: &str = "x-cos-storage-class";
 const TAGGING_HEADER: &str = "x-cos-tagging";
 const FORBID_OVERWRITE_HEADER: &str = "x-cos-forbid-overwrite";
 const USER_METADATA_PREFIX: &str = "x-cos-meta-";
+const ENCODED_METADATA_KEY_PREFIX: &str = "cos-rs-hex-";
 
 /// [`cos_rs::CredentialProvider`] used by [`TencentCos`].
 pub type CosCredentialProvider = Arc<dyn CredentialProvider>;
@@ -501,6 +504,23 @@ impl TencentCos {
             extensions: Extensions::new(),
         })
     }
+
+    async fn ensure_not_exists(&self, location: &Path) -> Result<()> {
+        match self.client.object().head(path_to_key(location), None).await {
+            Ok(_) => Err(already_exists(location)),
+            Err(err) if api_status(&err) == Some(StatusCode::NOT_FOUND) => Ok(()),
+            Err(err) => Err(map_cos_error(err, location)),
+        }
+    }
+
+    async fn ensure_exists(&self, location: &Path) -> Result<()> {
+        self.client
+            .object()
+            .head(path_to_key(location), None)
+            .await
+            .map(|_| ())
+            .map_err(|err| map_cos_error(err, location))
+    }
 }
 
 impl Debug for TencentCos {
@@ -537,18 +557,18 @@ impl ObjectStore for TencentCos {
         match mode {
             PutMode::Overwrite => {}
             PutMode::Create => {
+                self.ensure_not_exists(location).await?;
                 insert_header_value(
                     &mut put_options.extra_headers,
                     FORBID_OVERWRITE_HEADER,
                     "true",
                 )?;
             }
-            PutMode::Update(ref version) => {
-                let etag = version.e_tag.clone().ok_or_else(|| Error::Generic {
-                    store: STORE,
-                    source: "ETag required for conditional put".into(),
-                })?;
-                insert_header_value(&mut put_options.extra_headers, IF_MATCH.as_str(), &etag)?;
+            PutMode::Update(_) => {
+                return Err(not_implemented(
+                    "`put_opts` with mode `PutMode::Update`",
+                    self.to_string(),
+                ));
             }
         }
 
@@ -561,10 +581,10 @@ impl ObjectStore for TencentCos {
                 Some(put_options),
             )
             .await
-            .map_err(|e| match &mode {
+            .map_err(|e| match mode {
                 PutMode::Create => map_already_exists(e, location),
-                PutMode::Update(_) => map_precondition(e, location),
                 PutMode::Overwrite => map_cos_error(e, location),
+                PutMode::Update(_) => unreachable!("handled above"),
             })?;
 
         Ok(PutResult {
@@ -712,21 +732,28 @@ impl ObjectStore for TencentCos {
 
         let mut copy_options = ObjectCopyOptions::default();
         if mode == CopyMode::Create {
+            self.ensure_exists(from).await?;
+            self.ensure_not_exists(to).await?;
             insert_header_value(
                 &mut copy_options.extra_headers,
                 FORBID_OVERWRITE_HEADER,
                 "true",
             )?;
+
+            self.client
+                .object()
+                .copy(path_to_key(to), &self.copy_source(from), Some(copy_options))
+                .await
+                .map_err(|e| map_already_exists(e, to))?;
+
+            return Ok(());
         }
 
         self.client
             .object()
             .copy(path_to_key(to), &self.copy_source(from), Some(copy_options))
             .await
-            .map_err(|e| match mode {
-                CopyMode::Create => map_already_exists(e, to),
-                CopyMode::Overwrite => map_cos_error(e, to),
-            })?;
+            .map_err(|e| map_cos_error(e, to))?;
 
         Ok(())
     }
@@ -974,7 +1001,7 @@ fn object_put_options(attributes: &Attributes, tags: &TagSet) -> Result<ObjectPu
             Attribute::Metadata(name) => {
                 insert_header_value(
                     &mut options.extra_headers,
-                    &format!("{USER_METADATA_PREFIX}{name}"),
+                    &format!("{USER_METADATA_PREFIX}{}", encode_metadata_key(name)),
                     value,
                 )?;
             }
@@ -1001,10 +1028,18 @@ fn apply_get_preconditions(headers: &mut HeaderMap, options: &GetOptions) -> Res
         insert_header_value(headers, IF_NONE_MATCH.as_str(), value)?;
     }
     if let Some(value) = options.if_modified_since {
-        insert_header_value(headers, IF_MODIFIED_SINCE.as_str(), &value.to_rfc2822())?;
+        insert_header_value(
+            headers,
+            IF_MODIFIED_SINCE.as_str(),
+            &format_http_date(value),
+        )?;
     }
     if let Some(value) = options.if_unmodified_since {
-        insert_header_value(headers, IF_UNMODIFIED_SINCE.as_str(), &value.to_rfc2822())?;
+        insert_header_value(
+            headers,
+            IF_UNMODIFIED_SINCE.as_str(),
+            &format_http_date(value),
+        )?;
     }
     Ok(())
 }
@@ -1091,7 +1126,9 @@ fn attributes_from_headers(headers: &HeaderMap) -> Attributes {
         CONTENT_TYPE,
         Attribute::ContentType,
     );
-    if let Some(value) = header_str(headers, STORAGE_CLASS_HEADER) {
+    if let Some(value) = header_str(headers, STORAGE_CLASS_HEADER)
+        && !is_default_storage_class(&value)
+    {
         attributes.insert(Attribute::StorageClass, AttributeValue::from(value));
     }
 
@@ -1100,8 +1137,9 @@ fn attributes_from_headers(headers: &HeaderMap) -> Attributes {
         if let Some(suffix) = name.strip_prefix(USER_METADATA_PREFIX)
             && let Ok(value) = value.to_str()
         {
+            let name = decode_metadata_key(suffix).unwrap_or_else(|| suffix.to_owned());
             attributes.insert(
-                Attribute::Metadata(Cow::Owned(suffix.to_owned())),
+                Attribute::Metadata(Cow::Owned(name)),
                 AttributeValue::from(value.to_owned()),
             );
         }
@@ -1172,6 +1210,10 @@ fn parse_cos_datetime(value: &str) -> Result<DateTime<Utc>> {
         })
 }
 
+fn format_http_date(value: DateTime<Utc>) -> String {
+    value.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
+}
+
 fn unix_epoch() -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp(0, 0).expect("unix epoch is valid")
 }
@@ -1203,6 +1245,47 @@ fn etag_from_headers(headers: &HeaderMap) -> String {
 
 fn non_empty(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
+}
+
+fn is_default_storage_class(value: &str) -> bool {
+    matches!(value, "STANDARD" | "MAZ_STANDARD")
+}
+
+fn encode_metadata_key(key: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
+    let mut encoded =
+        String::with_capacity(ENCODED_METADATA_KEY_PREFIX.len() + key.len().saturating_mul(2));
+    encoded.push_str(ENCODED_METADATA_KEY_PREFIX);
+    for byte in key.as_bytes() {
+        encoded.push(HEX[(byte >> 4) as usize] as char);
+        encoded.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    encoded
+}
+
+fn decode_metadata_key(key: &str) -> Option<String> {
+    let hex = key.strip_prefix(ENCODED_METADATA_KEY_PREFIX)?;
+    if hex.len() % 2 != 0 {
+        return None;
+    }
+
+    let mut bytes = Vec::with_capacity(hex.len() / 2);
+    for pair in hex.as_bytes().chunks_exact(2) {
+        let high = hex_digit(pair[0])?;
+        let low = hex_digit(pair[1])?;
+        bytes.push((high << 4) | low);
+    }
+    String::from_utf8(bytes).ok()
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn map_builder_error(source: cos_rs::Error) -> Error {
@@ -1246,19 +1329,26 @@ fn map_cos_error_with_path(source: cos_rs::Error, path: impl Into<String>) -> Er
     }
 }
 
-fn map_already_exists(source: cos_rs::Error, path: &Path) -> Error {
-    match api_status(&source) {
-        Some(StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED) => Error::AlreadyExists {
-            path: path.to_string(),
-            source: Box::new(source),
-        },
-        _ => map_cos_error(source, path),
+fn already_exists(path: &Path) -> Error {
+    Error::AlreadyExists {
+        path: path.to_string(),
+        source: Box::new(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "object already exists",
+        )),
     }
 }
 
-fn map_precondition(source: cos_rs::Error, path: &Path) -> Error {
+fn not_implemented(operation: impl Into<String>, implementer: impl Into<String>) -> Error {
+    Error::NotImplemented {
+        operation: operation.into(),
+        implementer: implementer.into(),
+    }
+}
+
+fn map_already_exists(source: cos_rs::Error, path: &Path) -> Error {
     match api_status(&source) {
-        Some(StatusCode::NOT_FOUND | StatusCode::PRECONDITION_FAILED) => Error::Precondition {
+        Some(StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED) => Error::AlreadyExists {
             path: path.to_string(),
             source: Box::new(source),
         },
@@ -1293,6 +1383,13 @@ mod tests {
     }
 
     #[test]
+    fn formats_http_dates_with_gmt_timezone() {
+        let value = DateTime::<Utc>::from_timestamp(784_111_777, 0).unwrap();
+
+        assert_eq!(format_http_date(value), "Sun, 06 Nov 1994 08:49:37 GMT");
+    }
+
+    #[test]
     fn maps_attributes_and_tags_to_cos_put_options() {
         let mut attributes = Attributes::new();
         attributes.insert(Attribute::ContentType, AttributeValue::from("text/plain"));
@@ -1307,12 +1404,76 @@ mod tests {
 
         assert_eq!(options.content_type.as_deref(), Some("text/plain"));
         assert_eq!(
-            options.extra_headers.get("x-cos-meta-trace").unwrap(),
+            options
+                .extra_headers
+                .get("x-cos-meta-cos-rs-hex-7472616365")
+                .unwrap(),
             "abc"
         );
         assert_eq!(
             options.extra_headers.get(TAGGING_HEADER).unwrap(),
             "env=test"
+        );
+    }
+
+    #[test]
+    fn metadata_keys_are_encoded_for_safe_cos_headers() {
+        let encoded = encode_metadata_key("test_key");
+
+        assert_eq!(encoded, "cos-rs-hex-746573745f6b6579");
+        assert!(!encoded.contains('_'));
+        assert_eq!(decode_metadata_key(&encoded).as_deref(), Some("test_key"));
+        assert_eq!(decode_metadata_key("external-key"), None);
+    }
+
+    #[test]
+    fn attributes_from_headers_decodes_adapter_metadata_keys() {
+        let mut headers = HeaderMap::new();
+        let encoded_name = format!(
+            "{USER_METADATA_PREFIX}{}",
+            encode_metadata_key("key_with_spaces")
+        );
+        headers.insert(
+            HeaderName::from_bytes(encoded_name.as_bytes()).unwrap(),
+            HeaderValue::from_static("hello   world"),
+        );
+        headers.insert(
+            HeaderName::from_static("x-cos-meta-external-key"),
+            HeaderValue::from_static("external"),
+        );
+
+        let attributes = attributes_from_headers(&headers);
+
+        assert_eq!(
+            attributes
+                .get(&Attribute::Metadata(Cow::Borrowed("key_with_spaces")))
+                .map(AsRef::as_ref),
+            Some("hello   world")
+        );
+        assert_eq!(
+            attributes
+                .get(&Attribute::Metadata(Cow::Borrowed("external-key")))
+                .map(AsRef::as_ref),
+            Some("external")
+        );
+    }
+
+    #[test]
+    fn attributes_from_headers_omits_default_cos_storage_class() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            STORAGE_CLASS_HEADER,
+            HeaderValue::from_static("MAZ_STANDARD"),
+        );
+
+        let attributes = attributes_from_headers(&headers);
+        assert_eq!(attributes.get(&Attribute::StorageClass), None);
+
+        headers.insert(STORAGE_CLASS_HEADER, HeaderValue::from_static("ARCHIVE"));
+        let attributes = attributes_from_headers(&headers);
+        assert_eq!(
+            attributes.get(&Attribute::StorageClass).map(AsRef::as_ref),
+            Some("ARCHIVE")
         );
     }
 }

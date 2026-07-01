@@ -4,9 +4,11 @@ use crate::encoding::{RequestOptions, safe_sign_encode};
 use crate::error::{Error, Result};
 use async_trait::async_trait;
 use hmac::{Hmac, Mac};
+use percent_encoding::percent_decode_str;
 use reqwest::Method;
 use reqwest::header::{HOST, HeaderMap, HeaderValue};
 use sha1::{Digest, Sha1};
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
@@ -240,14 +242,11 @@ pub fn authorization(
     let sign_key = hmac_hex(secret_key.as_bytes(), key_time.as_bytes());
     let (format_headers, signed_header_list) = format_headers(headers);
     let (format_parameters, signed_parameter_list) = format_parameters(url);
+    let format_path = format_path(url);
     let format_string = format!(
         "{}\n{}\n{}\n{}\n",
         method.as_str().to_ascii_lowercase(),
-        if url.path().is_empty() {
-            "/"
-        } else {
-            url.path()
-        },
+        format_path,
         format_parameters,
         format_headers
     );
@@ -302,6 +301,15 @@ fn format_parameters(url: &Url) -> (String, Vec<String>) {
         .collect::<Vec<_>>()
         .join("&");
     (formatted, signed)
+}
+
+fn format_path(url: &Url) -> Cow<'_, str> {
+    let path = if url.path().is_empty() {
+        "/"
+    } else {
+        url.path()
+    };
+    percent_decode_str(path).decode_utf8_lossy()
 }
 
 fn format_headers(headers: &HeaderMap) -> (String, Vec<String>) {
@@ -398,6 +406,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(auth, expect);
+    }
+
+    #[test]
+    fn format_path_decodes_request_path_once_for_cos_signing() {
+        let url = Url::parse(
+            "https://example-1250000000.cos.ap-guangzhou.myqcloud.com/a/b%252Fc/foo.file",
+        )
+        .unwrap();
+        assert_eq!(format_path(&url), "/a/b%2Fc/foo.file");
+
+        let url = Url::parse(
+            "https://example-1250000000.cos.ap-guangzhou.myqcloud.com/dir/hello%20world.txt",
+        )
+        .unwrap();
+        assert_eq!(format_path(&url), "/dir/hello world.txt");
     }
 
     #[test]
